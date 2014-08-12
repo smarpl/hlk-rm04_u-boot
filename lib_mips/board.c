@@ -651,6 +651,7 @@ void board_init_f(ulong bootflag)
 	/* NOTREACHED - relocate_code() does not return */
 }
 
+#define SEL_LOAD_LINUX_WRITE_FLASH_BY_SERIAL	0
 #define SEL_LOAD_LINUX_SDRAM            1
 #define SEL_LOAD_LINUX_WRITE_FLASH      2
 #define SEL_BOOT_FLASH                  3
@@ -665,6 +666,7 @@ void board_init_f(ulong bootflag)
 void OperationSelect(void)
 {
 	printf("\nPlease choose the operation: \n");
+	printf("   %d: Load system code then write to Flash via Serial. \n", SEL_LOAD_LINUX_WRITE_FLASH_BY_SERIAL);
 	printf("   %d: Load system code to SDRAM via TFTP. \n", SEL_LOAD_LINUX_SDRAM);
 	printf("   %d: Load system code then write to Flash via TFTP. \n", SEL_LOAD_LINUX_WRITE_FLASH);
 	printf("   %d: Boot system code via Flash (default).\n", SEL_BOOT_FLASH);
@@ -1508,7 +1510,7 @@ void board_init_r (gd_t *id, ulong dest_addr)
 			if ((my_tmp = tstc()) != 0) {	/* we got a key press	*/
 				timer1 = 0;	/* no more delay	*/
 				BootType = getc();
-				if ((BootType < '1' || BootType > '5') && (BootType != '7') && (BootType != '8') && (BootType != '9'))
+				if ((BootType < '0' || BootType > '5') && (BootType != '7') && (BootType != '8') && (BootType != '9'))
 					BootType = '3';
 				printf("\n\rYou choosed %c\n\n", BootType);
 				break;
@@ -1538,6 +1540,52 @@ void board_init_r (gd_t *id, ulong dest_addr)
 #endif
 
 		switch(BootType) {
+		//SEL_LOAD_LINUX_WRITE_FLASH_BY_SERIAL
+		case '0':
+			printf("   \n%d: System Load Linux Kernel then write to Flash via Serial. \n", SEL_LOAD_LINUX_WRITE_FLASH_BY_SERIAL);
+			argc= 1;
+			setenv("autostart", "no");
+			my_tmp = do_load_serial_bin(cmdtp, 0, argc, argv);
+			NetBootFileXferSize=simple_strtoul(getenv("filesize"), NULL, 16);
+
+			int max_system_size = bd->bi_flashsize -
+					(CFG_BOOTLOADER_SIZE + CFG_CONFIG_SIZE + CFG_FACTORY_SIZE);
+
+			if (NetBootFileXferSize > max_system_size || my_tmp == 1) {
+				printf("Abort: Bootloader is too big or download aborted!\n");
+			}
+
+#if defined (CFG_ENV_IS_IN_NAND)
+			else {
+				printf("Not supported. Press a key to boot the system.");
+				confirm = getc();
+			}
+#elif defined (CFG_ENV_IS_IN_SPI)
+			else {
+				udelay (2000000);  // without this delay several next lines of output get lost
+				printf("-----------------------------\n");
+				printf("Load address: 0x%X\n", CFG_LOAD_ADDR);
+				printf("Write address: 0x%X\n", CFG_KERN_ADDR-CFG_FLASH_BASE);
+				printf("Size: %u\n", NetBootFileXferSize);
+				printf("Max system size: %d\n", max_system_size);
+				printf("-----------------------------\n");
+				raspi_erase_write((u8 *)CFG_LOAD_ADDR, CFG_KERN_ADDR-CFG_FLASH_BASE, NetBootFileXferSize);
+			}
+#else //CFG_ENV_IS_IN_FLASH
+			else {
+				printf("Not supported. Press a key to boot the system.");
+				confirm = getc();
+			}
+#endif //CFG_ENV_IS_IN_FLASH
+
+			//bootm bc050000
+			argc= 2;
+			sprintf(addr_str, "0x%X", CFG_KERN_ADDR);
+			argv[1] = &addr_str[0];
+			do_bootm(cmdtp, 0, argc, argv);
+			break;
+
+
 		case '1':
 			printf("   \n%d: System Load Linux to SDRAM via TFTP. \n", SEL_LOAD_LINUX_SDRAM);
 			tftp_config(SEL_LOAD_LINUX_SDRAM, argv);           
