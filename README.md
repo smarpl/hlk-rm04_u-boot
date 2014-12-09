@@ -5,6 +5,7 @@ When HLK-RM04 board is used in projects without ethernet socket it is impossible
 This modified bootloader includes new boot option - "Load system code then write to Flash via Serial.".
 Just press "0" when prompted and upload new firmware using kermit protocol.
 
+For more information and compiled binary see my blog post ["HLK-RM04 bootloader"](http://smarpl.com/content/hlk-rm04-bootloader)
 
 Build instructions
 ------------------
